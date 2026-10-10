@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>设置排序动效检查</title>
+<style>body{font:14px system-ui;margin:24px;color:#23334b}pre{white-space:pre-wrap}iframe{border:1px solid #ccd3df;width:100%;height:1050px}#frames{position:absolute;left:-20000px;top:0}button{padding:8px 16px}#events{position:sticky;top:0;background:#fff;padding:12px}</style>
+<h1>设置排序动效检查</h1><p>仅使用模拟书签与隔离的会话配置。</p>
+<pre id="results">运行中…</pre><div id="frames"></div>
+<button id="demo" hidden>打开手动拖拽预览</button><pre id="events"></pre><div id="demo-frame"></div>
+<script>
+(async () => {
+  const output = document.getElementById('results'), results = [];
+  const manual=new URLSearchParams(location.search).has('manual');
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const assert = (value, message) => { if (!value) throw new Error(message); };
+  const keys = list => [...list.children].map(row => row.dataset.key);
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  async function loadFrame(mode, theme, width, host=document.getElementById('frames')) {
+    const storeKey='hub-preview-cfg'+(mode==='safari'?'-safari':'');
+    sessionStorage.removeItem(storeKey); sessionStorage.removeItem(storeKey+'-data');
+    sessionStorage.removeItem('drmush-view-state-v1');
+    const frame = document.createElement('iframe'); frame.style.width = width + 'px';
+    const loaded = new Promise(resolve => frame.onload = resolve);
+    frame.src = '/newtab.html?browser=' + mode + '&theme=' + theme;
+    host.append(frame); await loaded;
+    const w = frame.contentWindow, doc = frame.contentDocument;
+    for (let i = 0; i < 100 && !doc.querySelector('.calendar-widget'); i++) await wait(20);
+    assert(doc.querySelector('.calendar-widget'), '页面未完成初始化');
+    if (mode === 'safari') {
+      await w.HUB_LOCAL_LIBRARY.importNodes(['工作','学习','设计','开发','工具'].map((title,i) =>
+        ({title,children:[{title:'模拟书签'+i,url:'https://github.com/'+i}]})), '模拟导入');
+      for (let i = 0; i < 100 && ![...doc.querySelectorAll('.nav a')].some(link=>link.textContent.includes('工作')); i++) await wait(20);
+    }
+    doc.getElementById('settings-btn').click(); doc.querySelector('[data-settings-page="layout"]').click();
+    await wait(240);
+    return { frame, w, doc };
+  }
+  for (const mode of manual?[]:['chrome','safari']) for (const theme of ['light','dark']) for (const width of [390,1100]) {
+    let frame;
+    try {
+      const context = await loadFrame(mode, theme, width); ({frame} = context);
+      const {w,doc} = context, list = doc.getElementById('st-order');
+      const writes = [], storage = w.HUB_API.storage.local, originalSet = storage.set;
+      storage.set = data => { if (data.cfg) writes.push(JSON.parse(JSON.stringify(data.cfg))); return originalSet(data); };
+      const getCfg = async () => (await storage.get('cfg')).cfg;
+      const event = (type,target,y,dt) => target.dispatchEvent(new w.DragEvent(type,{bubbles:true,cancelable:true,clientY:y,dataTransfer:dt}));
+      const start = row => { const dt = new w.DataTransfer(); event('dragstart',row,row.getBoundingClientRect().top+5,dt); return dt; };
+      const yAt = (row,fraction=.8) => { const r=row.getBoundingClientRect(); return r.top+r.height*fraction; };
+      const assertClear = () => assert(!list.classList.contains('settings-sorting') && [...list.children].every(row=>!row.style.transform && !row.classList.contains('settings-sort-source')), '拖动状态未清理');
+      const original = keys(list), sourceKey = original[2], source = list.children[2];
+      if(width===390) list.children[3].querySelector('.nm').textContent='学习与资料整理：这是一个较长的分类名称，用于检查换行后不同高度的条目是否正确让位';
+      const hidden = (await getCfg()).hidden || [];
+      assert(original.length >= 6, '模拟分类不足');
+      const dt = start(source), targetY = yAt(list.lastElementChild);
+      event('dragover',list,targetY,dt);
+      assert(list.classList.contains('settings-sorting'), '没有进入拖动预览');
+      assert(source.classList.contains('settings-sort-source'), '原位置缺少拖动提示');
+      assert(parseFloat(list.style.getPropertyValue('--sort-marker-y')) > source.offsetTop, '落点线没有移动');
+      assert([...list.children].some(row=>row!==source && row.style.transform && row.style.transform!=='translateY(0px)'), '相邻分类没有让位');
+      assert(same(keys(list),original) && writes.length===0, '预览阶段提前修改顺序或保存');
+      const reduced = w.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      assert(reduced ? w.getComputedStyle(source).transitionDuration==='0s' : w.getComputedStyle(source).transitionDuration.includes('0.18s'), '动效时长或减少动态效果规则错误');
+      await wait(220);
+      const visual = [...list.children].sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);
+      assert(visual.at(-1).dataset.key===sourceKey, '视觉落点与预期不符');
+      for(let i=1;i<visual.length;i++) assert(visual[i].getBoundingClientRect().top >= visual[i-1].getBoundingClientRect().bottom-1, '预览行互相重叠');
+      event('drop',list,targetY,dt); event('dragend',source,targetY,dt);
+      const expected = original.filter(key=>key!==sourceKey).concat(sourceKey);
+      assert(same(keys(list),expected) && writes.length===1 && same(writes[0].order,expected), '向下拖动未正确保存一次'); assertClear();
+      list.lastElementChild.querySelector('.nm').click();
+      assert(writes.length===1 && same((await getCfg()).hidden||[],hidden), '落下后的点击误触隐藏');
+      await wait(330);
+      const last = list.lastElementChild, upDT = start(last), upY = yAt(list.firstElementChild,.1);
+      event('dragover',list,upY,upDT); event('drop',list,upY,upDT); event('dragend',last,upY,upDT);
+      assert(keys(list)[0]===sourceKey && writes.length===2, '向上拖动或跨过聚合分类失败'); assertClear();
+      await wait(330);
+      const unchanged = keys(list), writesBeforeCancel=writes.length;
+      for (const cancel of ['escape','outside','blur','close']) {
+        const row=[...list.children].find(row=>row.draggable && row.dataset.key!==sourceKey), transfer=start(row), endY=yAt(list.lastElementChild);
+        event('dragover',list,endY,transfer);
+        if(cancel==='escape') doc.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        if(cancel==='outside') event('dragend',row,endY,transfer);
+        if(cancel==='blur') w.dispatchEvent(new w.Event('blur'));
+        if(cancel==='close') doc.getElementById('set-close').click();
+        assertClear(); assert(same(keys(list),unchanged) && writes.length===writesBeforeCancel, cancel+' 取消后仍保存了顺序');
+        if(cancel==='close') { doc.getElementById('settings-btn').click(); doc.querySelector('[data-settings-page="layout"]').click(); }
+      }
+      const idleDT=new w.DataTransfer(); event('drop',list,yAt(list.firstElementChild),idleDT);
+      assert(writes.length===writesBeforeCancel, '外部拖动意外改写顺序');
+      const fixed=[...list.children].find(row=>!row.draggable); start(fixed);
+      assertClear(); start(list.querySelector('.row-del')); assertClear();
+      await wait(330);
+      const stationary=[...list.children].find(row=>row.draggable), stationaryDT=start(stationary), stationaryY=yAt(stationary,.5);
+      event('drop',list,stationaryY,stationaryDT); event('dragend',stationary,stationaryY,stationaryDT);
+      assert(writes.length===writesBeforeCancel, '原位松手仍保存');
+      const folderOrder=keys(list);
+      doc.querySelector('[data-pm-catmode="auto"]').click(); await wait(330);
+      const autoBefore=keys(list), autoSource=[...list.children].find(row=>row.draggable), autoKey=autoSource.dataset.key;
+      const autoDT=start(autoSource), autoY=yAt(list.lastElementChild);
+      event('dragover',list,autoY,autoDT); event('drop',list,autoY,autoDT); event('dragend',autoSource,autoY,autoDT);
+      assert(keys(list).at(-1)===autoKey && same((await getCfg()).autoCatOrder,keys(list)), '自动分类顺序未保存');
+      assert(same((await getCfg()).order,folderOrder), '自动分类影响了文件夹顺序');
+      doc.querySelector('[data-pm-catmode="folders"]').click(); assert(same(keys(list),folderOrder), '切回文件夹丢失顺序');
+      const modules=doc.querySelector('[data-pm-list]'), moduleOrder=keys(modules), moduleSource=modules.firstElementChild;
+      const moduleDT=start(moduleSource), moduleY=yAt(modules.lastElementChild);
+      event('dragover',modules,moduleY,moduleDT); event('drop',modules,moduleY,moduleDT); event('dragend',moduleSource,moduleY,moduleDT);
+      assert(keys(modules).at(-1)==='weather' && keys(modules).at(-2)===moduleOrder[0], '首页模块顺序或固定天气位置错误');
+      assert(same((await getCfg()).homeSections,keys(modules).filter(key=>key!=='weather')), '模块顺序未保存');
+      start(modules.lastElementChild); assert(!modules.classList.contains('settings-sorting'), '天气被拖动');
+      const realMatchMedia=w.matchMedia, realAnimate=w.Element.prototype.animate; let animations=0;
+      w.matchMedia=query=>query.includes('prefers-reduced-motion')?{matches:true}:realMatchMedia.call(w,query);
+      w.Element.prototype.animate=function(...args){animations++;return realAnimate.apply(this,args)};
+      const reducedSource=list.lastElementChild, reducedDT=start(reducedSource), reducedY=yAt(list.firstElementChild,.1);
+      event('dragover',list,reducedY,reducedDT); event('drop',list,reducedY,reducedDT); event('dragend',reducedSource,reducedY,reducedDT);
+      assert(animations===0, '减少动态效果时仍播放落下动画');
+      w.matchMedia=realMatchMedia; w.Element.prototype.animate=realAnimate;
+      assert(doc.documentElement.scrollWidth<=width+1, '窄屏页面横向溢出');
+      results.push('PASS: '+mode+' / '+theme+' / '+width+'px · 预览、上下换位、保存、取消、分类模式、固定模块、减少动态效果');
+    } catch(error) { results.push('FAIL: '+mode+' / '+theme+' / '+width+'px: '+error.message); }
+    frame?.remove(); output.textContent=results.join('\n');
+  }
+  output.textContent=manual?'手动拖拽预览':(results.every(line=>line.startsWith('PASS'))?'ALL PASS':'FAILED')+'\n'+results.join('\n');
+  document.getElementById('demo').hidden=false;
+  document.getElementById('demo').onclick=async()=>{
+    const host=document.getElementById('demo-frame'); host.replaceChildren();
+    const {frame,w,doc}=await loadFrame('chrome','light',1100,host);
+    const log=document.getElementById('events'), history=[];
+    log.style.height='120px';
+    for(const type of ['dragstart','dragover','drop','dragend']) doc.addEventListener(type,event=>{
+      const list=doc.getElementById('st-order');
+      history.push(type+' · y='+event.clientY+' · top='+Math.round(list.getBoundingClientRect().top)+' · marker='+list.style.getPropertyValue('--sort-marker-y')+' · '+keys(list).join(', '));
+      log.textContent=history.slice(-5).join('\n');
+    },true);
+    log.textContent='可以拖动下方模拟分类；事件将显示在这里。'; frame.scrollIntoView();
+  };
+  if(manual) document.getElementById('demo').click();
+})().catch(error=>document.getElementById('results').textContent+='\nFAIL: '+error.message);
+</script></html>

@@ -1,0 +1,24 @@
+{
+  "name": "bookmarknavigator",
+  "version": "1.13.2",
+  "private": true,
+  "description": "书签导航台（bookmarknavigator）：DrMush 制作的跨浏览器书签导航扩展",
+  "author": {
+    "name": "DrMush",
+    "email": "bookmarknavigator@163.com"
+  },
+  "scripts": {
+    "docs": "node scripts/docs.cjs",
+    "docs:check": "node scripts/check-docs.cjs",
+    "build": "node scripts/build.cjs",
+    "release": "node scripts/release.cjs",
+    "package:safari": "node scripts/package-safari.cjs",
+    "prepare:github": "node scripts/prepare-github.cjs",
+    "test": "node scripts/test-all.cjs",
+    "preview": "node scripts/preview.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

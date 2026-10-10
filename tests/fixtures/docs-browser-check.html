@@ -1,0 +1,77 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>图文指南阅读检查</title>
+<style>body{font:15px/1.7 system-ui;margin:24px}pre{white-space:pre-wrap}#frames{position:absolute;left:-20000px;top:0}iframe{border:0;height:1000px}</style>
+<h1>图文指南阅读检查</h1><p>检查不同阅读宽度下的排版、配图、目录与可用链接。</p><pre id="results">运行中…</pre><div id="frames"></div>
+<script>
+(async()=>{
+  const paths=['/standalone/readme-only.html','/standalone/readme-only.html#install--safari','/docs/install.html','/docs/install.html#safari','/docs/install.html#firefox','/docs/usage.html','/docs/safari-sync.html','/docs/installer-preview.html'];
+  if(new URLSearchParams(location.search).has('developer'))paths.push('/developer/maintainer.html','/developer/safari-packaging.html');
+  const results=[], output=document.getElementById('results'), wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  const assert=(condition,message)=>{if(!condition)throw new Error(message)};
+  for(const url of paths)for(const width of [320,390,1280]){
+    const frame=document.createElement('iframe');frame.style.width=width+'px';const loaded=new Promise(resolve=>frame.onload=resolve);
+    frame.src=url;document.getElementById('frames').append(frame);await loaded;
+    try{
+      const doc=frame.contentDocument,w=frame.contentWindow;
+      /* 离屏检查中主动加载延迟配图。 */
+      for(const img of doc.images)img.loading='eager';
+      for(let i=0;i<100&&[...doc.images].some(img=>!img.complete);i++)await wait(20);
+      await wait(40);
+      assert(doc.documentElement.scrollWidth<=width+1,'页面横向溢出');
+      assert(doc.querySelector('h1')&&parseFloat(w.getComputedStyle(doc.querySelector('h1')).fontSize)>=24,'标题不够清晰');
+      for(const img of doc.querySelectorAll('img[src]')){assert(img.naturalWidth>0,'配图未加载：'+img.getAttribute('src'));assert(img.getAttribute('alt'),'配图缺少替代文字')}
+      const ids=[...doc.querySelectorAll('[id]')].map(el=>el.id);assert(new Set(ids).size===ids.length,'重复文档/配图 ID');
+      for(const link of doc.querySelectorAll('a[href^="#"]'))assert(doc.getElementById(decodeURIComponent(link.hash.slice(1))),'目录落点不存在');
+      const mobile=doc.querySelector('.mobile-toc'), sidebar=doc.querySelector('.sidebar');
+      assert(width<=740?w.getComputedStyle(mobile).display!=='none':w.getComputedStyle(sidebar).display!=='none','目录未适配宽度');
+      const developer=url.includes('maintainer')||url.includes('safari-packaging');
+      const nav=developer?'维护与发布/Safari 构建细节':'项目介绍/安装教程/使用指南';
+      assert([...doc.querySelectorAll('.primary-nav a')].map(a=>a.textContent).join('/')===nav,'用户导航与维护者导航未分开');
+      if(!developer)assert(![...doc.querySelectorAll('a')].some(a=>/maintainer|safari-packaging/.test(a.getAttribute('href'))),'公开用户页面包含维护者入口');
+      for(const link of sidebar.querySelectorAll('a'))assert(link.getAttribute('href').startsWith('#'),'侧栏混入了其他文档');
+      assert(doc.querySelector('.print'),'缺少打印入口');
+      for(const img of doc.querySelectorAll('figure img'))assert(img.closest('a')?.target==='_blank'||img.closest('button[data-zoom]'),'配图无法放大');
+      if(doc.body.hasAttribute('data-standalone-guide')){
+        const expected=url.includes('#install--safari')?'install':'overview';
+        assert(doc.querySelector('[data-doc-page]:not([hidden])').dataset.docPage===expected,'单文件直达章节没有显示');
+        for(const page of doc.querySelectorAll('[data-doc-page]')){
+          w.location.hash='#'+page.id;await wait(40);
+          assert(doc.querySelectorAll('[data-doc-page]:not([hidden])').length===1&&!page.hidden,'单文件章节切换失败：'+page.id);
+          assert(sidebar.querySelectorAll('[data-outline-for]:not([hidden])').length===1,'侧栏重复展示章节目录');
+          assert(doc.documentElement.scrollWidth<=width+1,'单文件章节横向溢出：'+page.id);
+        }
+        for(const tab of doc.querySelectorAll('[data-browser-tab]')){
+          tab.click();await wait(40);
+          assert(doc.querySelectorAll('[data-browser-panel]:not([hidden])').length===1,'单文件重复展示安装教程');
+          assert(!doc.querySelector('[data-browser-panel="'+tab.dataset.browserTab+'"]').hidden,'单文件浏览器切换失败');
+          const links=[...sidebar.querySelectorAll('[data-browser-link]')].filter(a=>!a.hidden);assert(links.length===1&&links[0].dataset.browserLink===tab.dataset.browserTab,'单文件侧栏浏览器目录不一致');
+        }
+        const tab=doc.querySelector('[data-browser-tab="chrome--edge"]');tab.click();await wait(40);tab.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));await wait(40);
+        assert(doc.querySelector('[data-browser-tab][aria-selected="true"]').dataset.browserTab==='firefox','单文件键盘切换失败');
+        w.location.hash='#overview';await wait(40);
+        const zoom=doc.querySelector('[data-zoom]');zoom.click();await wait(40);
+        assert(doc.querySelector('dialog').open&&doc.querySelector('dialog img').naturalWidth>0,'内嵌配图放大失败');doc.querySelector('.zoom-close').click();assert(!doc.querySelector('dialog').open,'配图关闭失败');
+        const dependencies=w.performance.getEntriesByType('resource').filter(entry=>!entry.name.startsWith('data:'));
+        assert(!dependencies.length,'单文件阅读请求了其他文件：'+dependencies.map(entry=>entry.name).join(','));
+      }
+      if(url.includes('install.html')){
+        const expected=url.includes('#safari')?'safari':url.includes('#firefox')?'firefox':'chrome--edge';
+        assert(doc.querySelector('[data-browser-tab][aria-selected="true"]').dataset.browserTab===expected,'直达链接没有选择对应浏览器');
+        const check=id=>{
+          assert(doc.querySelectorAll('[data-browser-panel]:not([hidden])').length===1,'同时展示了多个浏览器教程');
+          assert(!doc.querySelector('[data-browser-panel="'+id+'"]').hidden,'所选教程未显示');
+          const links=[...sidebar.querySelectorAll('[data-browser-link]')].filter(a=>!a.hidden);assert(links.length===1&&links[0].dataset.browserLink===id,'侧栏包含其他浏览器教程');
+          assert(doc.documentElement.scrollWidth<=width+1,'切换浏览器后横向溢出');
+        };
+        check(expected);
+        for(const tab of doc.querySelectorAll('[data-browser-tab]')){tab.click();check(tab.dataset.browserTab)}
+        const tab=doc.querySelector('[data-browser-tab="chrome--edge"]');tab.click();tab.dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));check('firefox');
+      }
+      if(url.includes('installer-preview'))assert(doc.querySelectorAll('figure svg').length===4,'Safari 安装包内教程配图缺失');
+      results.push('PASS: '+url+' / '+width+'px · 导航、目录、浏览器切换、配图、无溢出');
+    }catch(error){results.push('FAIL: '+url+' / '+width+'px · '+error.message)}
+    frame.remove();output.textContent=results.join('\n');
+  }
+  const failures=results.filter(line=>line.startsWith('FAIL'));
+  output.textContent=(failures.length?'FAILED':'ALL PASS')+' · '+(results.length-failures.length)+' / '+results.length+'\n'+failures.join('\n')+'\n'+results.join('\n');
+})().catch(error=>document.getElementById('results').textContent+='\nFAIL: '+error.message);
+</script></html>

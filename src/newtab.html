@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>书签导航台</title>
+<link rel="icon" href="icons/icon48.png" />
+<link rel="stylesheet" href="fonts.css" />
+<style>
+
+/* 界面基础样式。 */
+:root {
+  --wall-1:#6b7a99; --wall-2:#7d7396; --wall-3:#5c7d8a; --wall-4:#7a8296; --wall-5:#6d7385;
+  --wall-base:#1a1e28;
+  --ink:#fff; --ink-2:rgba(255,255,255,.78); --ink-3:rgba(255,255,255,.52); --ink-4:rgba(255,255,255,.32);
+  --glass-1:rgba(255,255,255,.10); --glass-2:rgba(255,255,255,.17); --glass-3:rgba(255,255,255,.24);
+  --glass-edge:rgba(255,255,255,.28); --glass-edge-soft:rgba(255,255,255,.13);
+  --float-bg:rgba(26,30,40,.78);
+  --float-edge:rgba(255,255,255,.28);
+  --float-blur:saturate(180%) blur(40px);
+  --float-shadow:0 1px 0 rgba(255,255,255,.09) inset, 0 22px 50px -12px rgba(0,0,0,.72);
+  --float-scrim:rgba(9,12,18,.42);
+  --float-inset-1:rgba(255,255,255,.055);
+  --float-inset-2:rgba(255,255,255,.09);
+  --float-inset-3:rgba(255,255,255,.14);
+  --float-inset-edge:rgba(255,255,255,.075);
+  --accent:#8fb8e8;
+  /* 圆角：小控件 9px，卡片 14px，浮层 18px。 */
+  --r-sm:9px;
+  --r-md:14px;
+  --r-lg:18px;
+}
+[data-theme="light"] {
+  --wall-1:#e8d5e8; --wall-2:#d6e4f2; --wall-3:#dff0ea; --wall-4:#ece9f0; --wall-5:#e2ecf7;
+  --wall-base:#eef0f5;
+  --ink:#1c1f26; --ink-2:rgba(28,31,38,.80); --ink-3:rgba(28,31,38,.56); --ink-4:rgba(28,31,38,.36);
+  --glass-1:rgba(255,255,255,.62); --glass-2:rgba(255,255,255,.76); --glass-3:rgba(255,255,255,.88);
+  --glass-edge:rgba(255,255,255,.92); --glass-edge-soft:rgba(255,255,255,.66);
+  --float-bg:rgba(255,255,255,.80);
+  --float-edge:rgba(255,255,255,.92);
+  --float-shadow:0 1px 0 rgba(255,255,255,.95) inset, 0 22px 50px -14px rgba(80,90,115,.42);
+  --float-scrim:rgba(54,64,80,.20);
+  --float-inset-1:rgba(28,31,38,.045);
+  --float-inset-2:rgba(28,31,38,.07);
+  --float-inset-3:rgba(28,31,38,.10);
+  --float-inset-edge:rgba(28,31,38,.085);
+  --accent:#3b6ea8;
+  --noise-op:.22;
+}
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+
+body {
+  margin:0; min-height:100vh; color:var(--ink);
+  font-family:'Outfit',-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  background-color:var(--wall-base);
+  background-image:
+    radial-gradient(60% 55% at 12% 8%,  var(--wall-2) 0%, transparent 60%),
+    radial-gradient(55% 50% at 88% 12%, var(--wall-1) 0%, transparent 58%),
+    radial-gradient(65% 60% at 78% 82%, var(--wall-3) 0%, transparent 62%),
+    radial-gradient(60% 55% at 18% 88%, var(--wall-5) 0%, transparent 58%),
+    radial-gradient(45% 45% at 50% 50%, var(--wall-4) 0%, transparent 70%);
+  background-attachment:fixed;
+}
+body::before {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  opacity:var(--noise-op,.5);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.32'/%3E%3C/svg%3E");
+  mix-blend-mode:overlay;
+}
+[data-theme="light"] body::before { mix-blend-mode:soft-light; }
+.mono { font-family:'JetBrains Mono',monospace; }
+
+.topbar {
+  position:sticky; top:0; z-index:60;
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:13px 26px;
+  background:rgba(255,255,255,.10);
+  -webkit-backdrop-filter:saturate(180%) blur(32px); backdrop-filter:saturate(180%) blur(32px);
+  border-bottom:1px solid var(--glass-edge-soft);
+  box-shadow:0 1px 0 rgba(255,255,255,.16) inset;
+}
+[data-theme="light"] .topbar { background:rgba(255,255,255,.58); box-shadow:0 1px 0 rgba(255,255,255,.85) inset, 0 1px 3px rgba(80,90,115,.06); }
+[data-theme="light"] .card {
+  box-shadow:
+    0 0 0 .5px rgba(255,255,255,.9) inset,
+    0 1px 2px rgba(80,90,115,.05),
+    0 6px 18px -8px rgba(80,90,115,.16);
+}
+[data-theme="light"] .card:hover {
+  box-shadow:
+    0 0 0 .5px rgba(255,255,255,1) inset,
+    0 2px 4px rgba(80,90,115,.06),
+    0 12px 28px -10px rgba(80,90,115,.22);
+}
+[data-theme="light"] .nav a.on,
+[data-theme="light"] .seg button[aria-pressed="true"] {
+  background:rgba(255,255,255,.95);
+  box-shadow:0 1px 2px rgba(80,90,115,.10), 0 0 0 .5px rgba(255,255,255,.9) inset;
+}
+[data-theme="light"] .nav a[data-key="all"] { border-bottom-color:rgba(28,31,38,.10); }
+[data-theme="light"] .sec-head { border-bottom-color:rgba(28,31,38,.10); }
+[data-theme="light"] .side { border-right-color:rgba(28,31,38,.10); }
+[data-theme="light"] .grid.drop-active { background:rgba(255,255,255,.5); }
+[data-theme="light"] .search-wrap,
+[data-theme="light"] .weather,
+[data-theme="light"] .icon-btn {
+  background:rgba(255,255,255,.68);
+  box-shadow:0 1px 2px rgba(80,90,115,.06), 0 0 0 .5px rgba(255,255,255,.8) inset;
+}
+[data-theme="light"] .wx-hourly,
+[data-theme="light"] .wx-daily { border-top-color:var(--float-inset-edge); }
+[data-theme="light"] .wx-d:hover { background:var(--float-inset-2); }
+.brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px; }
+.brand svg { width:19px; height:19px; color:var(--accent); }
+.topbar .spacer { flex:1; }
+
+.search-wrap {
+  position:relative; display:flex; align-items:center;
+  width:min(420px,42vw);
+  background:var(--glass-2);
+  -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+  border:1px solid var(--glass-edge-soft); border-radius:var(--r-sm); padding:0 11px;
+  transition:border-color .16s, box-shadow .16s;
+}
+.search-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(143,184,232,.18); }
+.search-wrap svg { width:15px; height:15px; flex:none; fill:none; stroke:var(--ink-3); stroke-width:1.9; }
+#search { flex:1; min-width:0; padding:9px 10px; border:0; outline:0; background:transparent; color:var(--ink); font-size:13.5px; }
+#search::placeholder { color:var(--ink-3); }
+#search::-webkit-search-cancel-button { filter:invert(.5); }
+
+.weather {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:5px 12px 5px 8px; border-radius:var(--r-md);
+  background:var(--glass-2);
+  -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+  border:1px solid var(--glass-edge-soft);
+  cursor:pointer; user-select:none;
+  transition:background .2s, border-color .2s, transform .2s;
+}
+.weather:hover { background:var(--glass-3); border-color:var(--glass-edge); }
+.weather:hover .w-city { color:var(--ink-2); }
+.w-icon { width:22px; height:22px; flex:none; display:grid; place-items:center; }
+.w-img { width:100%; height:100%; object-fit:contain; display:block; }
+/* tabular-nums 保持温度数字宽度稳定。 */
+.w-temp {
+  font-family:'Outfit',-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:17px; font-weight:400; line-height:1;
+  letter-spacing:-.01em; color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.w-city {
+  font-size:12px; color:var(--ink-3); max-width:96px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  transition:color .2s;
+}
+.weather.loading { opacity:.6; }
+
+.wx-wrap { position:relative; display:inline-flex; }
+.hint-line a { color:inherit; text-underline-offset:2px; }
+.wx-panel {
+  /* 浮层挂在 body 下，通过脚本定位，避开 topbar 的 backdrop root。 */
+  position:fixed; left:0; top:0; z-index:70;
+  width:324px; max-height:calc(100vh - 96px); overflow-y:auto;
+  padding:15px 4px 9px;
+  border-radius:var(--r-lg);
+  background:var(--float-bg);
+  -webkit-backdrop-filter:var(--float-blur); backdrop-filter:var(--float-blur);
+  border:1px solid transparent;
+  box-shadow:var(--float-shadow);
+  animation:wx-in .22s cubic-bezier(.22,1,.36,1);
+}
+@keyframes wx-in { from { opacity:0; transform:translateY(-7px) scale(.97); } to { opacity:1; transform:none; } }
+
+.wx-head { padding:0 15px 14px; }
+.wx-cityline { display:flex; align-items:center; gap:5px; margin-bottom:10px; }
+.wx-city { font-size:14px; font-weight:600; letter-spacing:.01em; }
+.wx-pin { width:11px; height:11px; opacity:.75; }
+.wx-now { display:flex; align-items:center; gap:13px; }
+.wx-now-icon { flex:none; }
+.wx-now-icon .w-img { width:50px; height:50px; display:block; }
+.wx-temp { font-size:46px; font-weight:200; line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.wx-meta { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+.wx-cond { font-size:15px; font-weight:500; }
+.wx-hl { font-size:13.5px; font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums; }
+
+.wx-hourly { border-top:1px solid var(--float-inset-edge); padding:11px 0 9px; }
+.wx-hours {
+  display:flex; gap:2px; overflow-x:auto; scrollbar-width:none;
+  padding:0 10px; -webkit-overflow-scrolling:touch;
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent 100%);
+}
+.wx-hours::-webkit-scrollbar { display:none; }
+.wx-h { flex:0 0 auto; width:52px; text-align:center; }
+.wx-h .hh { font-size:11.5px; color:var(--ink-2); margin-bottom:5px; }
+.wx-h .w-img { width:26px; height:26px; margin:0 auto; display:block; }
+.wx-h .tt { font-size:15px; font-weight:500; margin-top:4px; font-variant-numeric:tabular-nums; }
+
+.wx-daily { border-top:1px solid var(--float-inset-edge); padding:7px 0 2px; }
+.wx-days { display:flex; flex-direction:column; }
+.wx-d {
+  display:grid; grid-template-columns:1fr 34px 40px 34px 34px;
+  align-items:center; gap:5px;
+  padding:6px 15px; font-size:14px;
+  border-radius:var(--r-sm);
+  transition:background .15s;
+}
+.wx-d:hover { background:var(--float-inset-2); }
+.wx-d .dw { font-weight:500; }
+.wx-d .w-img { width:24px; height:24px; display:block; }
+.wx-d .pc { font-size:12.5px; color:#5AC8FA; text-align:right; font-variant-numeric:tabular-nums; }
+.wx-d .hi, .wx-d .lo { text-align:right; font-variant-numeric:tabular-nums; }
+.wx-d .hi { font-weight:600; }
+.wx-d .lo { color:var(--ink-2); }
+
+.icon-btn {
+  display:grid; place-items:center; width:36px; height:36px; padding:0;
+  border-radius:var(--r-sm); cursor:pointer;
+  background:var(--glass-2);
+  -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px);
+  border:1px solid var(--glass-edge-soft); color:var(--ink-2);
+  transition:background .2s, color .2s, border-color .2s;
+}
+.icon-btn:hover { background:var(--glass-3); color:var(--ink); border-color:var(--glass-edge); }
+.modal .icon-btn, .drawer .icon-btn { background:var(--float-inset-2); border-color:var(--float-inset-edge); }
+.modal .icon-btn:hover, .drawer .icon-btn:hover { background:var(--float-inset-3); border-color:var(--float-edge); }
+.icon-btn svg { width:16px; height:16px; fill:none; stroke:currentColor; }
+
+.wrap { position:relative; z-index:1; display:flex; align-items:flex-start; gap:20px; max-width:1400px; margin:0 auto; padding:22px 26px 70px; }
+
+.side {
+  flex:0 0 182px; width:182px;
+  padding:14px 14px 14px 0;
+  border-right:1px solid var(--glass-edge-soft);
+}
+.nav { display:flex; flex-direction:column; gap:3px; }
+.nav a {
+  display:flex; align-items:center; gap:9px;
+  padding:8px 11px; border-radius:var(--r-sm);
+  color:var(--ink-2); text-decoration:none; cursor:pointer;
+  font-size:13px; font-weight:500;
+  transition:background .18s, color .18s;
+}
+.nav a:hover { background:var(--glass-2); color:var(--ink); }
+.nav a.on { background:var(--glass-3); color:var(--ink); box-shadow:0 1px 0 rgba(255,255,255,.3) inset; }
+.nav a svg { width:15px; height:15px; flex:none; opacity:.9; }
+.nav a .n { margin-left:auto; font:400 10px 'JetBrains Mono',monospace; color:var(--ink-3); }
+.nav a[data-key="all"] { margin-bottom:7px; padding-bottom:10px; border-bottom:1px solid var(--glass-edge-soft); border-radius:var(--r-sm) var(--r-sm) 0 0; }
+.nav a[data-key="all"].on { border-radius:var(--r-sm); }
+.nav a.hidden-cat { opacity:.38; }
+
+.main { flex:1 1 auto; min-width:0; }
+.main-head { display:flex; align-items:baseline; gap:10px; margin-bottom:16px; }
+.main-head h1 { margin:0; font-size:21px; font-weight:600; letter-spacing:-.015em; }
+.main-head .sub { font-size:12.5px; color:var(--ink-3); }
+
+.sec { margin-bottom:20px; }
+.sec:last-child { margin-bottom:0; }
+.sec-head {
+  display:flex; align-items:center; gap:9px; width:100%;
+  padding:9px 4px; margin-bottom:11px;
+  border:0; border-bottom:1px solid var(--glass-edge-soft);
+  background:transparent; color:inherit;
+  font:600 13px 'Outfit',sans-serif; text-align:left; cursor:pointer;
+  transition:color .18s;
+}
+.sec-head:hover { color:var(--ink); }
+.sec-head .chev {
+  flex:none; width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round; opacity:.7;
+  transition:transform .22s cubic-bezier(.4,0,.2,1);
+}
+.sec.collapsed .chev { transform:rotate(-90deg); }
+.sec-head .n { margin-left:auto; font:400 10.5px 'JetBrains Mono',monospace; color:var(--ink-3); }
+.sec.collapsed .sec-head { border-bottom-color:transparent; margin-bottom:0; }
+.sec.collapsed .grid { display:none; }
+
+.grid { display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(94px,1fr)); }
+
+.card {
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px;
+  padding:13px 8px; border-radius:var(--r-md);
+  background:var(--glass-2);
+  -webkit-backdrop-filter:saturate(170%) blur(16px); backdrop-filter:saturate(170%) blur(16px);
+  border:1px solid var(--glass-edge-soft);
+  box-shadow:0 1px 0 rgba(255,255,255,.22) inset;
+  text-decoration:none; color:inherit; cursor:grab;
+  transition:background .2s ease, border-color .2s ease, box-shadow .2s ease;
+  touch-action:manipulation;
+}
+.card:hover { background:var(--glass-3); border-color:var(--glass-edge); }
+.card.dragging { opacity:.35; cursor:grabbing; }
+.card.drop-target { outline:2px dashed var(--accent); outline-offset:2px; }
+.card.longpress { background:var(--glass-3); border-color:var(--accent); }
+.grid.drop-active { background:rgba(255,255,255,.06); border-radius:var(--r-md); }
+
+.ico {
+  width:40px; height:40px; flex:none; display:grid; place-items:center; overflow:hidden;
+  border-radius:12px; font:700 18px 'Outfit',sans-serif; color:#fff;
+  box-shadow:0 3px 10px -3px rgba(0,0,0,.42), 0 1px 0 rgba(255,255,255,.3) inset;
+}
+.ico .fav { width:100%; height:100%; object-fit:contain; display:block; border-radius:inherit; }
+.card .nm {
+  display:-webkit-box; width:100%; text-align:center;
+  font-size:12.5px; font-weight:600; line-height:1.35;
+  -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+
+.empty-tip { margin:60px 0; text-align:center; color:var(--ink-3); font-size:13px; }
+
+.ctxmenu {
+  position:fixed; z-index:90; min-width:168px; padding:5px;
+  border-radius:var(--r-lg);
+  background:var(--float-bg);
+  -webkit-backdrop-filter:var(--float-blur); backdrop-filter:var(--float-blur);
+  border:1px solid transparent;
+  box-shadow:var(--float-shadow);
+}
+.ctxmenu button {
+  display:flex; align-items:center; gap:9px; width:100%;
+  padding:8px 11px; border:0; border-radius:var(--r-sm);
+  background:transparent; color:var(--ink);
+  font:500 13px 'Outfit',sans-serif; text-align:left; cursor:pointer;
+  transition:background .15s;
+}
+.ctxmenu button:hover { background:var(--float-inset-3); }
+.ctxmenu button.danger { color:#ff7b72; }
+.ctxmenu button.danger:hover { background:rgba(255,123,114,.16); }
+.ctxmenu svg { width:14px; height:14px; flex:none; opacity:.85; }
+.ctx-sep { height:1px; margin:4px 8px; background:var(--float-inset-edge); }
+
+.scrim { position:fixed; inset:0; z-index:95; display:grid; place-items:center; background:var(--float-scrim); }
+.modal {
+  width:min(360px,92vw); padding:22px; border-radius:var(--r-lg);
+  background:var(--float-bg);
+  -webkit-backdrop-filter:var(--float-blur); backdrop-filter:var(--float-blur);
+  border:1px solid transparent;
+  box-shadow:var(--float-shadow);
+}
+.modal h3 { margin:0 0 16px; font-size:15px; font-weight:600; }
+.modal label { display:block; margin-bottom:13px; font-size:12px; color:var(--ink-3); }
+.modal input, .drawer input[type="text"] {
+  width:100%; margin-top:5px; padding:9px 11px;
+  border:1px solid var(--float-inset-edge); border-radius:var(--r-sm);
+  background:var(--float-inset-2); color:var(--ink);
+  font:400 13px 'Outfit',sans-serif; outline:none;
+  transition:border-color .16s, background .16s;
+}
+.modal input:focus, .drawer input[type="text"]:focus { border-color:var(--accent); background:var(--float-inset-3); }
+.modal input:focus-visible, .drawer input[type="text"]:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.hint-line { margin:6px 0 0; font-size:11px; color:var(--ink-4); line-height:1.6; }
+.modal-acts { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+.legal-scrim { z-index:110; }
+.legal-modal {
+  width:min(360px,92vw); max-height:min(720px,calc(100vh - 32px));
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.legal-view { min-height:0; display:flex; flex-direction:column; }
+.legal-view[hidden] { display:none; }
+.legal-modal h3 { flex:none; }
+.legal-intro { margin:0 0 14px; color:var(--ink-2); font-size:12.5px; line-height:1.7; }
+.legal-doc-links { display:flex; flex-direction:column; gap:6px; }
+.legal-doc-link {
+  display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%;
+  padding:10px 11px; border:1px solid var(--float-inset-edge); border-radius:var(--r-sm);
+  background:var(--float-inset-1); color:var(--ink); text-align:left; cursor:pointer;
+  transition:background .16s, border-color .16s;
+}
+.legal-doc-link:hover { background:var(--float-inset-3); border-color:var(--float-edge); }
+.legal-doc-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.legal-doc-link > span:first-child { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.legal-doc-link strong { font-size:13px; font-weight:600; }
+.legal-doc-link small { color:var(--ink-3); font-size:11px; }
+.legal-doc-link > span:last-child { flex:none; color:var(--ink-3); font-size:21px; line-height:1; }
+.legal-check {
+  display:flex !important; align-items:flex-start; gap:8px; margin:15px 0 0 !important;
+  color:var(--ink-2) !important; font-size:12px !important; line-height:1.6;
+}
+.legal-check input { width:15px; height:15px; margin:2px 0 0; accent-color:var(--accent); flex:none; }
+.legal-check input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.legal-modal .modal-acts { flex:none; }
+.legal-modal .m-btn.primary:disabled { cursor:not-allowed; opacity:.42; }
+.legal-doc-head { display:flex; align-items:center; gap:9px; flex:none; margin-bottom:10px; }
+.legal-doc-head .icon-btn { width:30px; height:30px; flex:none; }
+.legal-doc-head h3 { min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.legal-doc-body { min-height:0; overflow-y:auto; padding:2px 2px 4px; }
+
+.m-btn {
+  padding:8px 15px; border:1px solid var(--float-inset-edge); border-radius:var(--r-sm);
+  background:var(--float-inset-2); color:var(--ink);
+  font:500 13px 'Outfit',sans-serif; cursor:pointer;
+  transition:background .16s, border-color .16s;
+}
+.m-btn:hover { background:var(--float-inset-3); border-color:var(--float-edge); }
+.m-btn.primary { background:rgba(255,255,255,.9); color:#1a1a20; border-color:transparent; }
+.m-btn.primary:hover { background:#fff; }
+.m-btn.danger-ghost { width:100%; color:#ff7b72; }
+.m-btn.danger-ghost:hover { background:rgba(255,123,114,.14); border-color:rgba(255,123,114,.4); }
+
+.pick-list { display:flex; flex-direction:column; gap:4px; max-height:290px; overflow-y:auto; }
+.pick-list button {
+  display:flex; align-items:center; gap:9px; width:100%;
+  padding:9px 11px; border:0; border-radius:var(--r-sm);
+  background:var(--float-inset-1); color:var(--ink);
+  font:500 13px 'Outfit',sans-serif; text-align:left; cursor:pointer;
+  transition:background .15s;
+}
+.pick-list button:hover { background:var(--float-inset-3); }
+.pick-list button svg { width:14px; height:14px; flex:none; opacity:.8; }
+.pick-list .cnt { margin-left:auto; font:400 11px 'JetBrains Mono',monospace; color:var(--ink-3); }
+
+.drawer {
+  position:fixed; top:0; right:0; z-index:96;
+  display:flex; flex-direction:column;
+  width:min(340px,92vw); height:100%; padding:20px 22px; overflow:hidden;
+  border-radius:var(--r-lg);
+  background:var(--float-bg);
+  -webkit-backdrop-filter:var(--float-blur); backdrop-filter:var(--float-blur);
+  border:1px solid transparent;
+  box-shadow:var(--float-shadow);
+  animation:drawer-in .22s cubic-bezier(.22,1,.36,1);
+}
+@keyframes drawer-in { from { transform:translateX(100%); } to { transform:none; } }
+.drawer-head {
+  position:relative; display:flex; align-items:center; justify-content:center;
+  flex:none; width:100%; min-height:30px; margin-bottom:22px; box-sizing:border-box;
+}
+/* 标题相对抽屉头居中。 */
+.drawer-head h2 {
+  max-width:calc(100% - 72px); min-width:0; margin:0; padding:0 2px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:16px; font-weight:600; line-height:1.35; text-align:center;
+}
+/* 关闭按钮固定在标题栏右侧。 */
+.drawer-head > .icon-btn { position:absolute; top:0; right:0; }
+.drawer .icon-btn { width:30px; height:30px; border-radius:var(--r-sm); }
+.drawer .icon-btn svg { width:15px; height:15px; }
+.settings-back {
+  position:absolute; top:0; left:0; display:inline-flex; align-items:center;
+  gap:2px; min-width:0; height:30px; padding:5px 4px 5px 0;
+  border:0; border-radius:var(--r-sm); background:transparent; color:var(--ink-2);
+  font:500 12px inherit; cursor:pointer; white-space:nowrap;
+}
+.settings-back:hover { color:var(--ink); background:var(--float-inset-1); }
+.settings-back:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.settings-back svg { width:15px; height:15px; flex:none; }
+.settings-back.icon-only { width:30px; justify-content:center; padding:5px; }
+.settings-back.icon-only span { display:none; }
+/* 内容独立滚动，保持标题栏尺寸稳定。 */
+.settings-pages { flex:1; min-height:0; overflow-x:hidden; overflow-y:auto; scrollbar-gutter:stable; }
+.settings-page { min-width:0; }
+.settings-page > .fld:first-child { margin-top:2px; }
+.settings-empty { margin:36px 2px; color:var(--ink-3); font-size:12px; line-height:1.7; }
+.settings-record-list { display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.settings-record {
+  display:flex; align-items:center; gap:10px; min-width:0; padding:10px 8px;
+  border-radius:var(--r-sm); background:var(--float-inset-1);
+}
+.settings-record-copy { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
+.settings-record-copy strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; color:var(--ink); }
+.settings-record-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; line-height:1.45; color:var(--ink-3); }
+.settings-record .m-btn { flex:none; white-space:nowrap; }
+.settings-row-copy b { font-weight:500; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.settings-list { display:flex; flex-direction:column; gap:0; margin:4px 0 0; }
+.settings-row {
+  display:flex; align-items:center; gap:12px; width:100%; min-width:0; padding:12px 6px;
+  border:0; border-bottom:1px solid var(--float-inset-edge); border-radius:var(--r-sm);
+  background:transparent; color:var(--ink); text-align:left; cursor:pointer;
+  transition:background .16s, color .16s;
+}
+.settings-row:hover { background:var(--float-inset-1); }
+.settings-row:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.settings-row-copy { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+.settings-row-copy strong { font-size:13px; font-weight:500; }
+.settings-row-copy small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-3); font-size:11px; }
+.settings-chevron { flex:none; color:var(--ink-4); font-size:23px; font-weight:300; line-height:1; }
+.settings-row:hover .settings-chevron { color:var(--ink-2); }
+.settings-lead { margin:4px 2px 9px; color:var(--ink-3); font-size:11px; font-weight:600; letter-spacing:.04em; }
+.about-list { margin-top:0; }
+.about-detail { padding:4px 2px 22px; color:var(--ink-2); font-size:12.5px; line-height:1.75; }
+.about-detail h3 { margin:0 0 12px; color:var(--ink); font-size:15px; font-weight:600; line-height:1.45; }
+.about-detail h4 { margin:18px 0 7px; color:var(--ink); font-size:12px; font-weight:600; letter-spacing:.02em; }
+.about-detail p { margin:0 0 12px; }
+.about-detail a { color:var(--accent); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; }
+.about-detail a:hover { color:var(--ink); }
+.about-detail ul, .about-detail ol { margin:0 0 14px; padding-left:20px; }
+.about-detail li { margin:0 0 8px; }
+.about-detail li:last-child { margin-bottom:0; }
+.about-kicker { color:var(--accent); font-size:12px; font-weight:600; letter-spacing:.03em; }
+.about-note { color:var(--ink-3); font-size:11px; }
+.about-callout { margin:12px 0 16px; padding:10px 12px; border-radius:var(--r-sm); background:var(--float-inset-1); color:var(--ink-2); font-size:11.5px; line-height:1.65; }
+.about-facts { display:flex; flex-direction:column; gap:7px; margin:0 0 16px; }
+.about-facts > div { display:grid; grid-template-columns:82px minmax(0,1fr); gap:10px; padding:8px 9px; border-radius:var(--r-sm); background:var(--float-inset-1); }
+.about-facts dt { min-width:0; color:var(--ink-3); font-size:11px; }
+.about-facts dd { min-width:0; margin:0; color:var(--ink-2); font-size:11.5px; overflow-wrap:anywhere; }
+.about-facts dd strong { color:var(--ink); font-weight:600; }
+.about-detail code { padding:1px 4px; border-radius:4px; background:var(--float-inset-2); color:var(--ink); font:11px 'JetBrains Mono',monospace; }
+#st-icons-content .hires-section { margin:0; }
+#st-icons-content .hires-section > label { display:block; margin-bottom:8px; color:var(--ink-2); }
+
+.fld { margin-bottom:22px; }
+.fld > label { display:block; margin-bottom:8px; font-size:12px; color:var(--ink-2); }
+.fld-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.fld-head > label { margin-bottom:0; }
+.fld .row { display:flex; gap:8px; }
+.fld .row input { flex:1; margin-top:0; }
+
+.m-btn.tiny { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; font-size:12px; }
+.m-btn.tiny svg { width:12px; height:12px; }
+
+.seg { display:inline-flex; padding:3px; gap:2px; background:var(--float-inset-2); border:1px solid var(--float-inset-edge); border-radius:var(--r-sm); }
+.seg button { flex:1; padding:7px 12px; border:0; border-radius:var(--r-sm); background:transparent; color:var(--ink-2); font:500 13px 'Outfit',sans-serif; cursor:pointer; transition:all .16s; }
+.seg button:hover { color:var(--ink); }
+.seg button[aria-pressed="true"] { background:var(--float-inset-3); color:var(--ink); box-shadow:0 1px 0 rgba(255,255,255,.3) inset; }
+.seg.full { display:flex; width:100%; }
+
+.order-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+.order-list li {
+  display:flex; align-items:center; gap:9px;
+  padding:8px 10px; border-radius:var(--r-sm);
+  background:var(--float-inset-1); border:1px solid transparent;
+  cursor:grab; user-select:none; transition:background .16s, opacity .16s;
+}
+.order-list li:hover { background:var(--float-inset-3); }
+.order-list li.dragging { opacity:.4; cursor:grabbing; }
+.order-list li.over { border-color:var(--accent); }
+.order-list li .grip {
+  width:12px; height:12px; flex:none; opacity:.45; color:var(--ink-2);
+  background-image:radial-gradient(currentColor 1px,transparent 1.2px); background-size:4px 4px;
+}
+.order-list li .nm { flex:1; font-size:13px; }
+.order-list li.off { opacity:.42; }
+.order-list li.off .nm { text-decoration:line-through; }
+.order-list li .cnt { font:400 11px 'JetBrains Mono',monospace; color:var(--ink-3); }
+.row-del {
+  flex:none; display:grid; place-items:center;
+  width:20px; height:20px; padding:0; border:0; border-radius:var(--r-sm);
+  background:transparent; color:var(--ink-3); opacity:.5; cursor:pointer;
+  transition:opacity .16s, color .16s, background .16s;
+}
+.row-del svg { width:11px; height:11px; }
+.row-del:hover { opacity:1; color:#ff7b72; background:rgba(255,123,114,.15); }
+[data-theme="light"] .row-del:hover { background:rgba(255,123,114,.12); }
+/* 添加弹窗层级高于设置抽屉。 */
+#addcat-scrim { z-index:97; }
+.newcat { display:flex; gap:8px; margin-bottom:12px; }
+.newcat input { flex:1; margin:0; }
+.newcat .m-btn { flex:none; white-space:nowrap; }
+.pick-list .grp { margin:2px 0 2px; }
+.drawer-foot { margin-top:26px; padding-top:16px; border-top:1px solid var(--float-inset-edge); }
+
+.toast {
+  position:fixed; left:50%; bottom:30px; z-index:99; transform:translateX(-50%);
+  padding:9px 17px; border-radius:var(--r-lg);
+  background:var(--float-bg);
+  -webkit-backdrop-filter:var(--float-blur); backdrop-filter:var(--float-blur);
+  border:1px solid transparent;
+  box-shadow:var(--float-shadow);
+  font-size:13px;
+}
+
+[data-theme="light"] .m-btn.primary { background:var(--accent); color:#fff; }
+[data-theme="light"] .m-btn.primary:hover { filter:brightness(1.1); }
+[data-theme="light"] .modal input,
+[data-theme="light"] .drawer input[type="text"] { background:var(--float-inset-2); border-color:var(--float-inset-edge); }
+[data-theme="light"] .m-btn:not(.primary) { background:var(--float-inset-2); border-color:var(--float-inset-edge); }
+[data-theme="light"] .m-btn:hover:not(.primary) { background:var(--float-inset-3); }
+[data-theme="light"] .pick-list button,
+[data-theme="light"] .order-list li { background:var(--float-inset-1); }
+[data-theme="light"] .pick-list button:hover,
+[data-theme="light"] .order-list li:hover { background:var(--float-inset-3); }
+[data-theme="light"] .ctxmenu button:hover { background:var(--float-inset-3); }
+[data-theme="light"] .nav a[data-key="all"],
+[data-theme="light"] .sec-head { border-bottom-color:rgba(23,26,33,.14); }
+[data-theme="light"] .side { border-right-color:rgba(23,26,33,.14); }
+
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(75% 65% at 10% 5%,  var(--wall-2) 0%, transparent 70%),
+    radial-gradient(70% 60% at 90% 10%, var(--wall-1) 0%, transparent 68%),
+    radial-gradient(75% 70% at 80% 90%, var(--wall-5) 0%, transparent 72%),
+    radial-gradient(70% 65% at 15% 92%, var(--wall-3) 0%, transparent 70%),
+    radial-gradient(60% 55% at 50% 50%, var(--wall-4) 0%, transparent 75%);
+}
+
+@media (max-width:820px) {
+  .wrap { flex-direction:column; padding:18px 16px 60px; }
+  .side { flex:none; width:100%; padding:0 0 14px; border-right:0; border-bottom:1px solid var(--glass-edge-soft); }
+  .nav { flex-direction:row; flex-wrap:wrap; }
+  .nav a[data-key="all"] { border-bottom:0; padding-bottom:8px; margin-bottom:0; border-radius:var(--r-sm); }
+  .search-wrap { width:auto; flex:1 1 200px; }
+}
+
+</style>
+<link rel="stylesheet" href="layout.css" />
+<link rel="stylesheet" href="settings-sort.css" />
+</head>
+<body>
+
+<div class="wrap">
+  <aside class="side">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M12 7v10"/>
+    </svg>
+    书签导航台
+  </div>
+
+    <nav class="nav" id="nav" aria-label="书签导航"></nav>
+    <p class="side-note">与浏览器书签保持一致</p>
+  </aside>
+
+  <main class="main">
+    <header class="hero">
+      <div class="main-head" id="main-head">
+        <h1 id="m-title">首页</h1>
+        <span class="sub" id="m-sub"></span>
+      </div>
+      <div class="hero-actions">
+  <div class="wx-wrap" id="wx-wrap">
+    <div class="weather" id="weather" title="点击查看详细天气">
+      <span class="w-icon" id="w-icon"></span>
+      <span class="w-temp" id="w-temp">--°</span>
+      <span class="w-city" id="w-city">定位中</span>
+    </div>
+  </div>
+
+  <button class="icon-btn" id="settings-btn" title="设置" aria-label="设置">
+    <svg viewBox="0 0 24 24" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 8.9 19a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 5 8.9a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9.5A1.7 1.7 0 0 0 10.5 3V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>
+    </svg>
+  </button>
+      </div>
+    </header>
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="搜索书签" aria-label="搜索书签" autocomplete="off" spellcheck="false" />
+      <kbd class="search-shortcut">Ctrl K</kbd>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+
+<div id="ctxmenu" class="ctxmenu" hidden>
+  <button data-act="edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>编辑信息</button>
+  <button data-act="move"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14M5 15h14"/><path d="m9 5-3 4 3 4M15 11l3 4-3 4"/></svg>移动到…</button>
+  <div class="ctx-sep"></div>
+  <button data-act="favorite-remove" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 14.2 9l5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7Z"/></svg>取消在常用书签中显示</button>
+  <button data-act="hide-display" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l16 16"/><path d="M10.6 6.2A9.8 9.8 0 0 1 12 6c5 0 8.5 6 8.5 6a16 16 0 0 1-3 3.3M6.4 7.4C4.8 8.5 3.5 10.2 3.5 12c0 0 3.5 6 8.5 6 1 0 1.9-.2 2.8-.5"/></svg>删除书签显示</button>
+  <button data-act="delete" class="danger" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>删除书签</button>
+</div>
+
+<div id="edit-scrim" class="scrim" hidden>
+  <div class="modal">
+    <h3>编辑书签</h3>
+    <label>名称<input id="ed-name" type="text" autocomplete="off" /></label>
+    <label>网址<input id="ed-url" type="url" autocomplete="off" /></label>
+    <p class="hint-line">保存后写回浏览器书签，即时生效</p>
+    <div class="modal-acts">
+      <button id="ed-cancel" class="m-btn">取消</button>
+      <button id="ed-save" class="m-btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="move-scrim" class="scrim" hidden>
+  <div class="modal">
+    <h3>移动到分类</h3>
+    <div id="pick-list" class="pick-list"></div>
+    <div class="modal-acts"><button id="mv-cancel" class="m-btn">取消</button></div>
+  </div>
+</div>
+
+<div id="addcat-scrim" class="scrim" hidden>
+  <div class="modal">
+    <h3>添加分类</h3>
+    <div class="newcat">
+      <input id="ac-name" type="text" placeholder="新建分类名称" maxlength="12" autocomplete="off" />
+      <button id="ac-create" class="m-btn primary">创建</button>
+    </div>
+    <div id="addcat-list" class="pick-list"></div>
+    <div class="modal-acts"><button id="ac-cancel" class="m-btn">取消</button></div>
+  </div>
+</div>
+
+<div id="legal-scrim" class="scrim legal-scrim" hidden>
+  <div class="modal legal-modal" role="dialog" aria-modal="true" aria-labelledby="legal-title">
+    <section id="legal-summary" class="legal-view">
+      <h3 id="legal-title">开始使用前请确认</h3>
+      <p class="legal-intro">欢迎使用书签导航台。继续使用前，请阅读服务协议和隐私协议，了解书签数据、天气请求与网站图标权限的处理边界。</p>
+      <div class="legal-doc-links" aria-label="协议文档">
+        <button class="legal-doc-link" type="button" data-legal-doc="terms">
+          <span><strong>服务协议</strong><small>导航台的使用约定</small></span><span aria-hidden="true">›</span>
+        </button>
+        <button class="legal-doc-link" type="button" data-legal-doc="privacy">
+          <span><strong>隐私协议</strong><small>数据读取、存储与权限说明</small></span><span aria-hidden="true">›</span>
+        </button>
+      </div>
+      <label class="legal-check"><input id="legal-consent" type="checkbox"><span>我已阅读并同意服务协议和隐私协议</span></label>
+      <div class="modal-acts"><button id="legal-agree" class="m-btn primary" type="button" disabled>同意并继续</button></div>
+    </section>
+    <section id="legal-document" class="legal-view" hidden aria-labelledby="legal-doc-title">
+      <div class="legal-doc-head">
+        <button id="legal-doc-back" class="icon-btn" type="button" aria-label="返回协议确认">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <h3 id="legal-doc-title">协议</h3>
+      </div>
+      <article id="legal-doc-body" class="about-detail legal-doc-body"></article>
+      <div class="modal-acts"><button id="legal-doc-return" class="m-btn" type="button">返回确认</button></div>
+    </section>
+  </div>
+</div>
+
+<div id="set-scrim" class="scrim" hidden style="place-items:stretch start"></div>
+<aside id="set-drawer" class="drawer" hidden aria-label="设置面板">
+  <div class="drawer-head">
+    <button id="set-back" class="settings-back" type="button" aria-label="返回设置" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      <span>设置</span>
+    </button>
+    <h2 id="set-title">设置</h2>
+    <button id="set-close" class="icon-btn" aria-label="关闭">
+      <svg viewBox="0 0 24 24" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
+  <div id="set-pages" class="settings-pages">
+    <section id="st-home-page" class="settings-page" aria-label="设置首页">
+      <div class="fld">
+        <label for="st-city">天气城市</label>
+        <div class="row">
+          <input id="st-city" type="text" placeholder="如：北京 / Tokyo / New York" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="st-city-list" />
+          <button id="st-city-save" class="m-btn primary">应用</button>
+        </div>
+        <div id="st-city-list" class="city-list" role="listbox" aria-label="城市备选项" hidden></div>
+        <p class="hint-line">输入后列出可匹配的城市，并显示国家与省市。</p>
+      </div>
+
+      <div class="fld">
+        <label>显示模式</label>
+        <div class="seg full" id="st-theme" role="group">
+          <button data-mode="auto" aria-pressed="false">跟随系统</button>
+          <button data-mode="light" aria-pressed="false">浅色</button>
+          <button data-mode="dark" aria-pressed="true">深色</button>
+        </div>
+      </div>
+
+      <div class="settings-list settings-home-list" aria-label="设置分类">
+        <button class="settings-row" type="button" data-settings-page="layout">
+          <span class="settings-row-copy"><strong>页面布局</strong><small>分类顺序、显示开关、数量与首页模块</small></span><span class="settings-chevron" aria-hidden="true">›</span>
+        </button>
+        <button id="local-library-settings-row" class="settings-row" type="button" data-settings-page="bookmarks" hidden>
+          <span class="settings-row-copy"><strong>本地书签</strong><small>导入 Safari 书签、导出本地书签备份</small></span><span class="settings-chevron" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row" type="button" data-settings-page="icons">
+          <span class="settings-row-copy"><strong>网站图标</strong><small>管理内置图标与已获取的高清图标</small></span><span class="settings-chevron" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row" type="button" data-settings-page="hidden">
+          <span class="settings-row-copy"><strong>隐藏书签</strong><small>已从导航台隐藏，原书签仍保留 · <b data-hidden-count>0</b> 个</small></span><span class="settings-chevron" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row" type="button" data-settings-page="trash">
+          <span class="settings-row-copy"><strong>回收站</strong><small>真实删除的书签保留 30 天 · <b data-trash-count>0</b> 个</small></span><span class="settings-chevron" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row" type="button" data-settings-page="about">
+          <span class="settings-row-copy"><strong>关于导航台</strong><small>版本、帮助、协议与信息清单</small></span><span class="settings-chevron" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <div class="drawer-foot">
+        <button id="st-reset" class="m-btn danger-ghost">恢复默认设置</button>
+      </div>
+    </section>
+
+    <section id="st-layout-page" class="settings-page" aria-label="页面布局" hidden>
+      <div class="fld">
+        <label>分类方式</label>
+        <div class="pm-seg" role="radiogroup" aria-label="默认分类方式">
+          <button type="button" data-pm-catmode="folders" role="radio" aria-checked="true">我的书签文件夹</button>
+          <button type="button" data-pm-catmode="auto" role="radio" aria-checked="false">按网站库自动分类</button>
+        </div>
+        <p class="hint-line" data-pm-mode-hint></p>
+      </div>
+
+      <div class="fld">
+        <div class="fld-head">
+          <label>分类顺序与显示</label>
+          <button id="st-cat-add" class="m-btn tiny">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            <span>添加</span>
+          </button>
+        </div>
+        <ul id="st-order" class="order-list"></ul>
+        <p class="hint-line">拖动调整顺序，点击名称切换显示；移出面板不会删除浏览器书签。</p>
+      </div>
+
+      <div class="fld layout-modules">
+        <label>首页模块</label>
+        <p class="hint-line">控制首页模块的显示、顺序，以及常用书签和列表数量。</p>
+        <p class="pm-label">常用书签</p>
+        <div class="pm-row">
+          <span class="pm-handle" aria-hidden="true"></span>
+          <span class="pm-copy"><strong>首页收藏卡片</strong><small>置顶显示，可调数量</small></span>
+          <span class="pm-ctl"><span class="stepper"><button type="button" data-pm-step="favorites:-1" aria-label="减少一个">−</button><b data-pm-value="favorites">6</b><button type="button" data-pm-step="favorites:1" aria-label="增加一个">+</button></span></span>
+          <label class="switch"><input type="checkbox" data-pm-toggle="favorites" checked><span></span></label>
+        </div>
+        <div class="pm-preview" data-pm-preview></div>
+        <p class="hint-line">每行 4–8 个，超过 8 个自动分成两行。</p>
+        <p class="pm-label">模块顺序与显示<small>拖动可调整顺序</small></p>
+        <ul class="pm-list" data-pm-list></ul>
+      </div>
+    </section>
+
+    <section id="st-bookmarks-page" class="settings-page" aria-label="本地书签" hidden>
+      <section id="safari-sync-settings" class="fld" hidden aria-label="Safari 自动同步">
+        <label>Safari 自动同步 · 实验功能</label>
+        <p class="hint-line">打开 macOS“书签导航台”App，授权辅助功能后开启自动同步。助手需保持运行，Safari 在前台时会通过“文件 > 将浏览数据导出到文件”读取书签。同步模式的删除会修改 Safari 原书签，需在助手中再次确认；暂不支持写回编辑、移动、文件夹删除或自动还原。</p>
+        <p id="safari-sync-status" class="hint-line" role="status" aria-live="polite"></p>
+        <button id="safari-sync-refresh" class="m-btn" type="button">检查同步状态</button>
+      </section>
+      <section id="local-library" class="fld" hidden aria-label="Safari 本地书签库">
+        <label>导入与备份</label>
+        <p id="local-library-help" class="hint-line"></p>
+        <div class="local-library-actions">
+          <button id="local-import" class="m-btn primary" type="button">导入书签 HTML</button>
+          <button id="local-export" class="m-btn" type="button">导出本地书签</button>
+        </div>
+        <input id="local-import-file" type="file" accept=".html,.htm,text/html" hidden />
+        <p id="local-library-status" class="hint-line" role="status" aria-live="polite"></p>
+      </section>
+    </section>
+
+    <section id="st-icons-page" class="settings-page" aria-label="网站图标" hidden>
+      <div id="st-icons-content"></div>
+    </section>
+
+    <section id="st-hidden-page" class="settings-page" aria-label="隐藏书签" hidden>
+      <div id="st-hidden-content"></div>
+    </section>
+
+    <section id="st-trash-page" class="settings-page" aria-label="回收站" hidden>
+      <div id="st-trash-content"></div>
+    </section>
+
+    <section id="st-about-page" class="settings-page" aria-label="关于导航台" hidden>
+      <p class="settings-lead">关于导航台</p>
+      <div class="settings-list about-list">
+        <button class="settings-row" type="button" data-about-detail="version"><span class="settings-row-copy"><strong>版本介绍</strong><small>当前版本与功能说明</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="help"><span class="settings-row-copy"><strong>使用帮助</strong><small>快速了解书签、搜索与日历</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="feedback"><span class="settings-row-copy"><strong>意见反馈</strong><small>提交问题时请附上复现步骤</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="logs"><span class="settings-row-copy"><strong>上传日志</strong><small>仅在排查问题时手动提供</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="terms"><span class="settings-row-copy"><strong>服务协议</strong><small>导航台的使用约定</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="privacy"><span class="settings-row-copy"><strong>隐私协议</strong><small>数据读取、存储与权限说明</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="open-source"><span class="settings-row-copy"><strong>开源条款</strong><small>第三方资源与许可</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="personal-info"><span class="settings-row-copy"><strong>个人信息清单</strong><small>本地处理的数据类别</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+        <button class="settings-row" type="button" data-about-detail="third-party"><span class="settings-row-copy"><strong>第三方信息共享清单</strong><small>天气与城市检索服务说明</small></span><span class="settings-chevron" aria-hidden="true">›</span></button>
+      </div>
+    </section>
+
+    <section id="st-about-detail-page" class="settings-page" aria-label="详情" hidden>
+      <article class="about-detail" data-about-detail-body></article>
+    </section>
+  </div>
+</aside>
+
+<div class="toast" id="toast" hidden></div>
+
+<!-- 天气浮层挂在 body 下，避免顶栏的 backdrop-filter 限制模糊范围。 -->
+<div class="wx-panel" id="wx-panel" hidden role="dialog" aria-label="天气详情">
+  <div id="wx-body">
+  <header class="wx-head">
+    <div class="wx-cityline">
+      <button class="wx-city" id="p-city" type="button" title="点击更换城市" aria-label="点击更换城市">--</button>
+      <svg viewBox="0 0 24 24" class="wx-pin" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11Z"/><circle cx="12" cy="10" r="2.4"/></svg>
+    </div>
+    <div class="wx-now">
+      <span class="wx-now-icon" id="p-now-icon"></span>
+      <div class="wx-temp" id="p-temp">--°</div>
+      <div class="wx-meta">
+        <div class="wx-cond" id="p-cond">--</div>
+        <span class="wx-hl" id="p-hl">--°~--°</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="wx-hourly" aria-label="逐小时预报">
+    <div class="wx-hours" id="p-hours"></div>
+  </section>
+
+  <section class="wx-daily" aria-label="未来几天预报">
+    <div class="wx-days" id="p-days"></div>
+  </section>
+  </div>
+
+  <div class="wx-search" id="wx-search" hidden>
+    <div class="wx-search-head">
+      <input id="wx-city-input" type="text" autocomplete="off" placeholder="搜索城市，如 上海 / Shanghai" aria-label="搜索城市">
+      <button class="text-action" id="wx-search-back" type="button" aria-label="返回天气详情">取消</button>
+    </div>
+    <div class="city-list" id="wx-city-list" role="listbox" aria-label="城市备选项" hidden></div>
+  </div>
+</div>
+
+<script src="weather-icons.js"></script>
+
+<script src="bundled-logos.js"></script>
+<script src="logo-policy.js"></script>
+<script src="site-categories.js"></script>
+<script src="local-bookmarks.js"></script>
+<script src="safari-sync.js"></script>
+<script src="compat.js"></script>
+<script src="settings-sort.js"></script>
+<script src="app.js"></script>
+<script src="organize.js"></script>
+<script src="drag.js"></script>
+<script src="hires-icons.js"></script>
+<script src="safari-library-ui.js"></script>
+</body>
+</html>

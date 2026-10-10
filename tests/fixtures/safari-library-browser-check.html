@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Safari 书签解析检查</title>
+<body><h1>Safari 书签解析检查</h1><pre id="results">运行中…</pre>
+<script src="/local-bookmarks.js"></script>
+<script>
+(() => {
+  const { parseHTML, exportHTML } = HUB_LOCAL_BOOKMARKS;
+  const results = [];
+  function check(name, fn) { try { fn(); results.push('PASS: ' + name); } catch (e) { results.push('FAIL: ' + name + ': ' + e.message); } }
+  function assert(value, message) { if (!value) throw new Error(message); }
+  const sample = '<!DOCTYPE NETSCAPE-Bookmark-file-1><DL><p><DT><H3>工作 &amp; 学习</H3><DL><p><DT><A HREF="https://github.com" ADD_DATE="1700000000">GitHub</A><DT><H3>嵌套</H3><DL><p><DT><A HREF="https://developer.mozilla.org/">MDN</A></DL><p><DT><H3>空目录</H3><DL><p></DL><p></DL><p><DT><A HREF="https://apple.com/">Apple</A><DT><A HREF="javascript:alert(1)">危险</A></DL><p>';
+  const { nodes, skipped } = parseHTML(sample);
+  check('Netscape HTML 层级与中文转义', () => assert(nodes[0].title === '工作 & 学习' && nodes[0].children[1].children[0].title === 'MDN', JSON.stringify(nodes)));
+  check('空文件夹、直接书签与添加时间', () => assert(nodes[0].children[2].children.length === 0 && nodes[1].title === 'Apple' && nodes[0].children[0].dateAdded === 1700000000000, '结构或时间不符'));
+  check('跳过危险协议', () => assert(skipped === 1, '未跳过 javascript URL'));
+  check('Safari DL > H3 导出结构', () => { const parsed = parseHTML('<DL><H3>收藏</H3><DL><DT><A HREF="https://example.org/">例子</A></DL><H3>空</H3><DL></DL></DL>'); assert(parsed.nodes[0].children[0].title === '例子' && parsed.nodes[1].children.length === 0, JSON.stringify(parsed)); });
+  check('Safari 26 无外层 DL 的多个顶层目录与根书签', () => {
+    const parsed = parseHTML('<DT><H3>收藏</H3><DL><DT><A HREF="https://a.example/">甲</A></DL><DT><H3>菜单</H3><DL><DT><A HREF="https://b.example/">乙</A></DL><DT><A HREF="https://c.example/">丙</A>');
+    assert(parsed.nodes.length === 3 && parsed.nodes[0].children[0].title === '甲' && parsed.nodes[1].children[0].title === '乙' && parsed.nodes[2].title === '丙', JSON.stringify(parsed));
+  });
+  check('导出后重新导入保留全部层级', () => {
+    const html = exportHTML([{ children: [{ children: nodes }] }]);
+    const seconds = (key, value) => key === 'dateAdded' ? Math.floor(value / 1000) : value;
+    assert(JSON.stringify(parseHTML(html).nodes, seconds) === JSON.stringify(nodes, seconds), 'round-trip changed data');
+  });
+  check('HTML 解析前移除联网资源与样式', () => {
+    let sanitized = '';
+    class InspectParser { parseFromString(text, type) { sanitized = text; return new DOMParser().parseFromString(text, type); } }
+    parseHTML('<DL style="background:url(https://example.invalid/x)"><DT><A HREF="https://example.org" onclick="alert(1)">例子</A><img src="https://example.invalid/x"><iframe src="https://example.invalid/y"></iframe><script>alert(1)<\/script></DL>', InspectParser);
+    assert(!/img|iframe|script|style=|onclick=|example\.invalid/.test(sanitized), sanitized);
+  });
+  check('错误输入不会当作书签导入', () => { let rejected = 0; for (const text of ['hello', '<DL><A HREF="javascript:x">x</A></DL>']) { try { parseHTML(text); } catch (_) { rejected++; } } assert(rejected === 2, 'invalid file accepted'); });
+  document.getElementById('results').textContent = results.join('\n') + '\n' + (results.every(r => r.startsWith('PASS')) ? 'ALL PASS' : 'FAILED');
+})();
+</script></body></html>

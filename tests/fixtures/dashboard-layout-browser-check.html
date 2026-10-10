@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><title>书签导航台布局检查</title>
+<style>body{font:14px system-ui;margin:24px}pre{white-space:pre-wrap}iframe{border:0;height:1000px}#frames{position:absolute;left:-20000px;top:0}</style>
+<h1>书签导航台布局检查</h1>
+<p>检查首页入口、设置导航，以及不同卡片宽度下的待办日期和表单边界。</p>
+<pre id="results">运行中…</pre><div id="frames"></div>
+<script>
+(async () => {
+  const output = document.getElementById('results'), results = [];
+  function assert(value, message) { if (!value) throw new Error(message); }
+  const widths = [320, 390, 480, 640, 820, 1024, 1280];
+  const visible = el => el.getClientRects().length > 0;
+  for (const theme of ['light', 'dark']) for (const width of widths) {
+    const frame = document.createElement('iframe'); frame.style.width = width + 'px';
+    const loaded = new Promise(resolve => frame.onload = resolve);
+    frame.src = '/newtab.html?browser=safari&theme=' + theme;
+    document.getElementById('frames').append(frame);
+    await loaded;
+    const w = frame.contentWindow, doc = frame.contentDocument;
+    try {
+      for (let i = 0; i < 100 && !doc.querySelector('.calendar-widget'); i++) await new Promise(resolve => setTimeout(resolve, 20));
+      doc.querySelector('.nav a[data-key="home"]').click();
+      assert(doc.querySelector('.brand').textContent.trim() === '书签导航台', '侧栏名称不一致');
+      assert(!doc.querySelector('main #local-library'), '导入导出仍位于主页');
+      assert(!visible(doc.getElementById('local-import')), '主页显示了导入入口');
+      doc.getElementById('settings-btn').click();
+      const entry = doc.getElementById('local-library-settings-row');
+      assert(visible(entry), '设置缺少本地书签入口'); entry.click();
+      assert(doc.getElementById('set-title').textContent === '本地书签', '设置导航标题错误');
+      assert(visible(doc.getElementById('local-import')) && visible(doc.getElementById('local-export')), '设置页未显示导入导出');
+      doc.getElementById('set-close').click();
+      doc.querySelector('[data-date][aria-current="date"]').click();
+      for (const mode of ['point', 'range']) {
+        doc.querySelector('[data-todo-mode="' + mode + '"]').click();
+        const widget = doc.querySelector('.calendar-widget'), day = doc.querySelector('.cal-day');
+        const bounds = widget.getBoundingClientRect();
+        const selectors = ['.calendar-toolbar', '.calendar-toolbar strong', '.day-total', '.day-scroll', '.hour-row', '.day-add', '.todo-mode', '.todo-time-fields', '.day-colors', '[data-day-text]', '.day-add-row .m-btn'];
+        for (const selector of selectors) for (const el of day.querySelectorAll(selector)) {
+          if (!visible(el)) continue;
+          const rect = el.getBoundingClientRect();
+          assert(rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1, selector + ' 横向越出卡片');
+          assert(rect.bottom <= bounds.bottom + 1 || el.closest('.day-scroll'), selector + ' 纵向越出卡片');
+        }
+        for (const selector of ['.cal-body', '.day-add', '.day-add-toolbar', '.todo-time-fields']) {
+          const el = doc.querySelector(selector);
+          assert(el.scrollWidth <= el.clientWidth + 1, selector + ' 存在横向溢出');
+        }
+        const modeBounds = day.querySelector('.todo-mode').getBoundingClientRect();
+        const timeBounds = day.querySelector('.todo-time-fields').getBoundingClientRect();
+        const dayWidth = day.clientWidth - parseFloat(w.getComputedStyle(day).paddingLeft) - parseFloat(w.getComputedStyle(day).paddingRight);
+        if (dayWidth > 190 && dayWidth <= 360) assert(Math.abs(modeBounds.top - timeBounds.top) <= 4, '时间类型与起止时间未保持单行');
+        assert(doc.documentElement.scrollWidth <= width + 1, '页面存在横向溢出');
+      }
+      results.push('PASS: ' + width + 'px / ' + theme + ' / 单行、无溢出、设置入口');
+    } catch (e) { results.push('FAIL: ' + width + 'px / ' + theme + ': ' + e.message); }
+    frame.remove(); output.textContent = results.join('\n');
+  }
+  output.textContent = (results.every(line => line.startsWith('PASS')) ? 'ALL PASS' : 'FAILED') + '\n' + results.join('\n');
+})().catch(error => document.getElementById('results').textContent += '\nFAIL: ' + error.message);
+</script>
+</html>
